@@ -17,6 +17,7 @@
     overflow: hidden;
     background: #0a0a0c;
     overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Ögat ligger i en kvadrat (1000 x 1000 enheter) som skalas efter fönstrets
@@ -27,24 +28,19 @@
     width: 100%;
     height: 100%;
     display: block;
-  }
-  /* Stående skärm (mobil): ögat får ta mer av bredden. */
-  @media (orientation: portrait) {
-    #scen { transform: scale(1.4); }
+    font-family: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
   }
 
-  /* Iris är kontaktknappen. Orden i ringen och "Kopiera" i pupillen visas först
-     när man pekar på den. På pekskärm, som saknar mouseover, visas orden alltid. */
+  /* Iris är kontaktknappen. Med mus visas orden och pilen först när man pekar
+     på den. På pekskärm står de där hela tiden. */
   #iris { cursor: pointer; outline: none; }
   #iris:focus-visible > circle:first-child { stroke: #ffffff; stroke-width: 4; }
-  #ring, .pupilltext, .glansen { transition: opacity .2s ease; }
-  #ring, .pupilltext { opacity: 0; }
-  .pupilltext { pointer-events: none; }
-  #iris.visa #ring, #iris.visa .pupilltext { opacity: 1; }
-  #iris.visa .glansen { opacity: 0; }
-  @media (hover: none) {
-    #ring { opacity: 1; }
-  }
+  #iris:active { opacity: .85; }
+  .ring, .pil, .glans { transition: opacity .2s ease; }
+  .mus .ring, .mus .pil { opacity: 0; }
+  .mus #iris.visa .ring, .mus #iris.visa .pil { opacity: 1; }
+  .mus #iris.visa .glans { opacity: 0; }
 
   /* Egen muspekare: en pil som alltid pekar in mot ögat och knuffar lite åt det hållet.
      Blandningsläget gör den synlig på både ljus och mörk botten. */
@@ -92,40 +88,7 @@
 </head>
 <body>
 
-<svg id="scen" viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid meet">
-  <defs>
-    <clipPath id="ogonform"><path d="M-300 0 A375 375 0 0 1 300 0 A375 375 0 0 1 -300 0Z"/></clipPath>
-    <path id="ringbana" d="M-85.2 0 a85.2 85.2 0 1 1 170.4 0 a85.2 85.2 0 1 1 -170.4 0"/>
-  </defs>
-  <rect x="-5000" y="-5000" width="10000" height="10000" fill="#0a0a0c"/>
-
-  <g id="oga">
-    <g id="ogonlock">
-      <g clip-path="url(#ogonform)">
-        <rect x="-305" y="-155" width="610" height="310" fill="#ffffff"/>
-        <g id="iris" role="button" tabindex="0" aria-label="Kopiera kontaktadressen">
-          <circle r="124" fill="#2244b8"/>
-          <!-- Tre ord och tre punkter på exakt 60 graders avstånd -->
-          <g id="ring" fill="#ffffff" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-             font-weight="600" font-size="22.3" letter-spacing="5.4" text-anchor="middle" aria-hidden="true">
-            <text><textPath href="#ringbana" startOffset="25%">KONTAKT</textPath></text>
-            <circle cy="-93" r="2.7" transform="rotate(60)"/>
-            <text transform="rotate(120)"><textPath href="#ringbana" startOffset="25%">KONTAKT</textPath></text>
-            <circle cy="-93" r="2.7" transform="rotate(180)"/>
-            <text transform="rotate(240)"><textPath href="#ringbana" startOffset="25%">KONTAKT</textPath></text>
-            <circle cy="-93" r="2.7" transform="rotate(300)"/>
-          </g>
-          <g id="pupill">
-            <circle r="62" fill="#1e1c1c"/>
-            <circle class="glansen" cx="-26" cy="-27.9" r="17.4" fill="#ffffff"/>
-            <text class="pupilltext" y="6.8" fill="#ffffff" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-                  font-weight="600" font-size="18.6" text-anchor="middle" aria-hidden="true">Kopiera</text>
-          </g>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
+<svg id="scen" viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid meet"></svg>
 
 <div id="korn"></div>
 
@@ -133,31 +96,115 @@
 
 <script>
 (() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const KOBOLT = '#2244b8', VIT = '#ffffff', SVART = '#1e1c1c';
   const lugn = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const oga = document.getElementById('oga');
-  const ogonlock = document.getElementById('ogonlock');
-  const iris = document.getElementById('iris');
-  const ring = document.getElementById('ring');
-  const pupill = document.getElementById('pupill');
-  const pupilltext = iris.querySelector('.pupilltext');
+  const harMus = matchMedia('(hover: hover) and (pointer: fine)');
+  const scen = document.getElementById('scen');
   const pekarbild = document.getElementById('pekare');
   const riktning = pekarbild.querySelector('.riktning');
 
-  // Hur långt iris får vandra från mitten (i ögats enheter) och på vilket
-  // avstånd från ögat blicken når fullt utslag.
-  const RX = 109, RY = 26, RACKA = 390;
+  // Två utseenden. Med mus: avlångt öga som följer pekaren, och knappen visas när
+  // man pekar på iris. På pekskärm: rundare öga med stor iris som står helt stilla
+  // och alltid visar knappen. Måtten är i enheter där 1000 = skärmens kortaste sida.
+  const MUS = { w: 300, h: 150, iris: 124, pupill: 62 };
+  const PEK = { w: 460, h: 360, iris: 290, pupill: 115 };
+
   const VILA_MS = 3000; // så länge efter senaste rörelsen fortsätter ögat titta på pekaren
 
+  let oga, ogonlock, iris, pupill, ring, matt; // delar av det öga som visas just nu
   let pekare = null;
   let senastRorelse = -Infinity;
   let vandring = null, nastaVandring = 0;
-  let hovrar = false, kopierad = false;
+  let hovrar = false;
   let x = 0, y = 0, blink = 1, blinkMal = 1;
 
-  // --- Blicken ---------------------------------------------------------------
+  function el(namn, attr, foralder) {
+    const e = document.createElementNS(NS, namn);
+    for (const k in attr) e.setAttribute(k, attr[k]);
+    if (foralder) foralder.appendChild(e);
+    return e;
+  }
 
-  // Dit ögat ska titta just nu: pekaren (eller fingret) om den nyss rört sig,
-  // annars en punkt som flyttar sig lite då och då så att ögat ser sig omkring.
+  // --- Bygg ögat ---------------------------------------------------------------
+
+  function bygg() {
+    matt = harMus.matches ? MUS : PEK;
+    const { w, h, iris: ri, pupill: rp } = matt;
+    scen.replaceChildren();
+    scen.classList.toggle('mus', harMus.matches);
+    if (!harMus.matches) document.documentElement.classList.remove('har-pekare');
+    hovrar = false; x = y = 0;
+
+    // Ögats form: en mandel av två cirkelbågar.
+    const R = (w * w + h * h) / (2 * h);
+    const form = `M${-w} 0 A${R} ${R} 0 0 1 ${w} 0 A${R} ${R} 0 0 1 ${-w} 0Z`;
+    el('rect', { x: -5000, y: -5000, width: 10000, height: 10000, fill: '#0a0a0c' }, scen);
+    oga = el('g', {}, scen);
+    el('path', { d: form }, el('clipPath', { id: 'ogonform' }, oga));
+    ogonlock = el('g', {}, oga);
+    const inre = el('g', { 'clip-path': 'url(#ogonform)' }, ogonlock);
+    el('path', { d: form, fill: VIT }, inre);
+
+    iris = el('g', { id: 'iris', role: 'button', tabindex: 0, 'aria-label': 'Skicka mejl till Seform' }, inre);
+    el('circle', { r: ri, fill: KOBOLT }, iris);
+
+    // "KONTAKT" tre gånger runt iris med en punkt mittemellan varje ord. Textstorleken
+    // begränsas av både bandets höjd och omkretsen, så att orden får luft emellan sig.
+    const band = ri - rp;
+    const grad = Math.min(band * 0.36, (rp + band / 2) * 0.25);
+    const bas = rp + band / 2 - grad * 0.35;
+    el('path', { id: 'ringbana', d: `M${-bas} 0 a${bas} ${bas} 0 1 1 ${2 * bas} 0 a${bas} ${bas} 0 1 1 ${-2 * bas} 0` }, el('defs', {}, iris));
+    ring = el('g', { class: 'ring', fill: VIT, 'font-size': grad, 'letter-spacing': grad * 0.24,
+                     'text-anchor': 'middle', 'aria-hidden': 'true' }, iris);
+    for (let k = 0; k < 3; k++) {
+      const ord = el('text', { transform: `rotate(${k * 120})` }, ring);
+      el('textPath', { href: '#ringbana', startOffset: '25%' }, ord).textContent = 'KONTAKT';
+      el('circle', { cy: -(bas + grad * 0.35), r: grad * 0.12, transform: `rotate(${60 + k * 120})` }, ring);
+    }
+
+    // Pupillen: reflex i vila (bara med mus), annars pilen snett uppåt höger.
+    pupill = el('g', {}, iris);
+    el('circle', { r: rp, fill: SVART }, pupill);
+    if (harMus.matches) el('circle', { class: 'glans', cx: -rp * 0.42, cy: -rp * 0.45, r: rp * 0.28, fill: VIT }, pupill);
+    const a = rp * 0.36;
+    el('path', { class: 'pil', d: `M${-a} ${a} L${a} ${-a} M${-a * 0.45} ${-a} H${a} V${a * 0.45}`, fill: 'none', stroke: VIT,
+                 'stroke-width': a * 0.32, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, pupill);
+
+    iris.addEventListener('click', mejla);
+    iris.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mejla(); }
+    });
+    iris.addEventListener('pointerenter', e => {
+      if (e.pointerType !== 'mouse') return;
+      hovrar = true;
+      pekarbild.classList.add('gomd');
+      uppdatera();
+    });
+    iris.addEventListener('pointerleave', () => {
+      hovrar = false;
+      pekarbild.classList.remove('gomd');
+      uppdatera();
+    });
+    iris.addEventListener('focus', uppdatera);
+    iris.addEventListener('blur', uppdatera);
+  }
+
+  const uppdatera = () => iris.classList.toggle('visa', hovrar || iris.matches(':focus-visible'));
+
+  // --- Kontakt -----------------------------------------------------------------
+
+  // Adressen finns inte i klartext någonstans i filen, och ingen mejllänk ligger i
+  // sidan. Den ligger som en omräknad sifferrad och räknas fram först när någon
+  // faktiskt klickar. Då öppnas besökarens mejlprogram med adressen ifylld.
+  const KOD = [67, 88, 66, 68, 91, 81, 76, 108, 94, 73, 77, 85, 99, 85, 25, 101, 80];
+  const adress = () => String.fromCharCode(...KOD.map((n, i) => (n - i) ^ 37));
+  const mejla = () => { location.href = ['mail', 'to:'].join('') + adress(); };
+
+  // --- Blicken (bara med mus) -----------------------------------------------------
+
+  // Dit ögat ska titta just nu: pekaren om den nyss rört sig, annars en punkt som
+  // flyttar sig lite då och då så att ögat ser sig omkring.
   function blickpunkt(nu) {
     if (pekare && (hovrar || nu - senastRorelse < VILA_MS)) return pekare;
     if (lugn) return pekare;
@@ -169,94 +216,42 @@
   }
 
   function bildruta(nu) {
-    const blick = blickpunkt(nu);
-    const m = blick && oga.getScreenCTM();
-    let malX = 0, malY = 0;
-    if (m) {
-      const p = new DOMPoint(blick.x, blick.y).matrixTransform(m.inverse());
-      const d = Math.hypot(p.x, p.y) || 1;
-      const k = Math.min(1, d / RACKA);
-      malX = (p.x / d) * RX * k;
-      malY = (p.y / d) * RY * k;
+    if (harMus.matches) {
+      const RX = (matt.w - matt.iris) * 0.62, RY = matt.h - matt.iris, RACKA = matt.w * 1.3;
+      const blick = blickpunkt(nu);
+      const m = blick && oga.getScreenCTM();
+      let malX = 0, malY = 0;
+      if (m) {
+        const p = new DOMPoint(blick.x, blick.y).matrixTransform(m.inverse());
+        const d = Math.hypot(p.x, p.y) || 1;
+        const k = Math.min(1, d / RACKA);
+        malX = (p.x / d) * RX * k;
+        malY = (p.y / d) * RY * k;
+      }
+      x += (malX - x) * 0.12;
+      y += (malY - y) * 0.12;
+      blink += (blinkMal - blink) * 0.35;
+      iris.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+      pupill.setAttribute('transform', `translate(${(x * 0.14).toFixed(2)} ${(y * 0.5).toFixed(2)})`);
+      ogonlock.setAttribute('transform', `scale(1 ${blink.toFixed(3)})`);
+      if (!lugn) ring.setAttribute('transform', `rotate(${((nu * 0.03) % 360).toFixed(2)})`);
     }
-    x += (malX - x) * 0.12;
-    y += (malY - y) * 0.12;
-    blink += (blinkMal - blink) * 0.35;
-    iris.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
-    pupill.setAttribute('transform', `translate(${(x * 0.14).toFixed(2)} ${(y * 0.5).toFixed(2)})`);
-    ogonlock.setAttribute('transform', `scale(1 ${blink.toFixed(3)})`);
-    if (!lugn) ring.setAttribute('transform', `rotate(${((nu * 0.03) % 360).toFixed(2)})`);
     requestAnimationFrame(bildruta);
   }
 
   function blinka() {
-    blinkMal = 0.04;
-    setTimeout(() => { blinkMal = 1; }, 130);
+    if (harMus.matches) {
+      blinkMal = 0.04;
+      setTimeout(() => { blinkMal = 1; }, 130);
+    }
     setTimeout(blinka, 2500 + Math.random() * 4500);
   }
 
-  function sePa(e) {
+  window.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || !harMus.matches) return;
     pekare = { x: e.clientX, y: e.clientY };
     senastRorelse = performance.now();
-  }
-  window.addEventListener('pointermove', sePa);
-  window.addEventListener('pointerdown', sePa);
-
-  // --- Kontakt -----------------------------------------------------------------
-
-  // Adressen finns inte i klartext någonstans i filen. Den ligger som en omräknad
-  // sifferrad och räknas fram först när någon faktiskt klickar, och skrivs aldrig in i sidan.
-  const KOD = [67, 88, 66, 68, 91, 81, 76, 108, 94, 73, 77, 85, 99, 85, 25, 101, 80];
-  const adress = () => String.fromCharCode(...KOD.map((n, i) => (n - i) ^ 37));
-
-  async function kopiera(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Äldre webbläsare eller osäker anslutning: kopiera via ett dolt textfält.
-      const falt = document.createElement('textarea');
-      falt.value = text;
-      falt.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(falt);
-      falt.select();
-      document.execCommand('copy');
-      falt.remove();
-    }
-  }
-
-  const uppdatera = () => iris.classList.toggle('visa', hovrar || kopierad || iris.matches(':focus-visible'));
-  let aterstall;
-  async function tryck() {
-    await kopiera(adress());
-    pupilltext.textContent = 'Kopierat';
-    kopierad = true;
-    uppdatera();
-    clearTimeout(aterstall);
-    aterstall = setTimeout(() => { pupilltext.textContent = 'Kopiera'; kopierad = false; uppdatera(); }, 1600);
-  }
-
-  iris.addEventListener('pointerenter', e => {
-    if (e.pointerType !== 'mouse') return;
-    hovrar = true;
-    pekarbild.classList.add('gomd');
-    uppdatera();
-  });
-  iris.addEventListener('pointerleave', () => {
-    hovrar = false;
-    pekarbild.classList.remove('gomd');
-    uppdatera();
-  });
-  iris.addEventListener('focus', uppdatera);
-  iris.addEventListener('blur', uppdatera);
-  iris.addEventListener('click', tryck);
-  iris.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tryck(); }
-  });
-
-  // --- Muspekaren: följer musen och vrids så att pilen pekar mot ögat ------------
-
-  window.addEventListener('pointermove', e => {
-    if (e.pointerType !== 'mouse') return;
+    // Muspekaren följer musen och vrids så att pilen pekar mot ögat.
     document.documentElement.classList.add('har-pekare');
     pekarbild.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
     const m = oga.getScreenCTM();
@@ -265,6 +260,10 @@
   });
   document.addEventListener('pointerleave', () => document.documentElement.classList.remove('har-pekare'));
 
+  // --- Start ---------------------------------------------------------------------
+
+  bygg();
+  harMus.addEventListener('change', bygg); // t.ex. när en mus kopplas till en surfplatta
   requestAnimationFrame(bildruta);
   if (!lugn) setTimeout(blinka, 1800);
 })();
