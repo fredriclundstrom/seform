@@ -74,23 +74,11 @@
   @media (prefers-reduced-motion: reduce) {
     #pekare svg { animation: none; }
   }
-
-  /* Lätt korn över allt, så att ytorna känns tryckta. */
-  #korn {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    opacity: .22;
-    mix-blend-mode: multiply;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.4 -.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
 </style>
 </head>
 <body>
 
 <svg id="scen" viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid meet"></svg>
-
-<div id="korn"></div>
 
 <div id="pekare" aria-hidden="true"><div class="riktning"><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20 H32"/><path d="M22 10 L32 20 L22 30"/></svg></div></div>
 
@@ -141,10 +129,13 @@
     const form = `M${-w} 0 A${R} ${R} 0 0 1 ${w} 0 A${R} ${R} 0 0 1 ${-w} 0Z`;
     el('rect', { x: -5000, y: -5000, width: 10000, height: 10000, fill: '#0a0a0c' }, scen);
     oga = el('g', {}, scen);
-    el('path', { d: form }, el('clipPath', { id: 'ogonform' }, oga));
+    // Ögonvitan ritas som en vanlig fylld form, och iris skärs till med en mask i
+    // stället för en klippbana. Masker får mjuka kanter, klippbanor blir taggiga.
+    const mask = el('mask', { id: 'ogonform', maskUnits: 'userSpaceOnUse', x: -w, y: -h, width: 2 * w, height: 2 * h }, oga);
+    el('path', { d: form, fill: '#ffffff' }, mask);
     ogonlock = el('g', {}, oga);
-    const inre = el('g', { 'clip-path': 'url(#ogonform)' }, ogonlock);
-    el('path', { d: form, fill: VIT }, inre);
+    el('path', { d: form, fill: VIT }, ogonlock);
+    const inre = el('g', { mask: 'url(#ogonform)' }, ogonlock);
 
     iris = el('g', { id: 'iris', role: 'button', tabindex: 0, 'aria-label': 'Skicka mejl till Seform' }, inre);
     el('circle', { r: ri, fill: KOBOLT }, iris);
