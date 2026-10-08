@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-320 -320 640 640'%3E%3Crect x='-320' y='-320' width='640' height='640' fill='%230a0a0c'/%3E%3Cpath d='M-300 0A375 375 0 0 1 300 0A375 375 0 0 1-300 0Z' fill='%23fff'/%3E%3Ccircle r='124' fill='%232244b8'/%3E%3Ccircle r='62' fill='%231e1c1c'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Knewave&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
 <style>
   html, body {
     margin: 0;
@@ -30,6 +30,41 @@
     display: block;
     font-family: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-weight: 600;
+  }
+
+  /* Hälsningen. Med mus: centrerad i nederkant under ögat. De två meningarna står på
+     en rad när bredden räcker, annars bryts raden mellan dem (aldrig mitt i en mening). */
+  #halsning {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(5vmin, env(safe-area-inset-bottom));
+    margin: 0;
+    padding: 0 max(5vmin, env(safe-area-inset-right)) 0 max(5vmin, env(safe-area-inset-left));
+    color: #ffffff;
+    font: 400 clamp(14px, 2.7vmin, 28px)/1.5 Knewave, "Marker Felt", "Comic Sans MS", cursive;
+    text-align: center;
+    pointer-events: none;
+  }
+  #halsning span { display: inline-block; white-space: nowrap; }
+
+  /* Pekskärm (mobil, surfplatta): texten ligger uppe till vänster och vänsterställd.
+     Där får den mer luft, och den krockar inte med webbläsarens knappar i nederkant. */
+  @media (hover: none), (pointer: coarse) {
+    #halsning {
+      top: max(5vmin, env(safe-area-inset-top));
+      bottom: auto;
+      text-align: left;
+    }
+  }
+  /* Låg liggande skärm (mobil på tvären): där når ögat nästan ut till över- och
+     underkant, så texten hålls i vänstra hörnet på två rader för att gå fri. */
+  @media (orientation: landscape) and (max-height: 480px) {
+    #halsning {
+      right: auto;
+      width: 44vw;
+      text-align: left;
+    }
   }
 
   /* Iris är kontaktknappen. Med mus visas orden och pilen först när man pekar
@@ -79,6 +114,8 @@
 <body>
 
 <svg id="scen" viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid meet"></svg>
+
+<p id="halsning"><span>Nothing to see here.</span> <span>Feel free to say hello.</span></p>
 
 <div id="pekare" aria-hidden="true"><div class="riktning"><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20 H32"/><path d="M22 10 L32 20 L22 30"/></svg></div></div>
 
